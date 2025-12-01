@@ -133,7 +133,34 @@ def interpret_single(req: InterpretSingle):
     
     # 모델의 fine-tuning 형식에 맞춘 프롬프트 구조
     # instruction과 input을 명확히 분리
-    result = generate_with_qwen(caption=req.caption, context=reference_context)
+    # ---------------------------------------------------------------------------------
+    # generate_with_qwen 시그니처 충돌 진단:
+    # 현재 실행 환경에서 함수가 다른 버전(예: generate_with_qwen(prompt))일 수 있으므로
+    # 1) 시그니처 로깅  2) 키워드 실패 시 positional fallback 제공
+    # ---------------------------------------------------------------------------------
+    import inspect
+    try:
+        sig = inspect.signature(generate_with_qwen)
+        logger.info(f"🔍 generate_with_qwen signature: {sig}")
+    except Exception as _sig_err:
+        logger.warning(f"⚠️ 시그니처 확인 실패: {_sig_err}")
+
+    try:
+        result = generate_with_qwen(caption=req.caption, context=reference_context)
+    except TypeError as e:
+        logger.warning(f"⚠️ 키워드 인자 호출 실패: {e}. positional 방식으로 재시도")
+        try:
+            # 2-arg positional 시도
+            result = generate_with_qwen(req.caption, reference_context)
+        except TypeError as e2:
+            logger.error(f"❌ positional 2-arg 호출도 실패: {e2}")
+            try:
+                # 1-arg (context 미포함) 시도
+                result = generate_with_qwen(req.caption)
+                logger.info("✅ 1-arg 호출 성공 (context 미사용)")
+            except Exception as e3:
+                logger.error(f"❌ 모든 호출 형태 실패: {e3}")
+                raise
     
     logger.info(f"✅ [INTERPRET_SINGLE] 해석 완료")
     logger.info(f"생성된 해석: {result[:200]}..." if len(result) > 200 else f"생성된 해석: {result}")
