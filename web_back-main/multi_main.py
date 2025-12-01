@@ -133,19 +133,24 @@ def interpret_single(req: InterpretSingle):
     
     # 모델의 fine-tuning 형식에 맞춘 프롬프트 구조
     # instruction과 input을 명확히 분리
-    prompt = f"""Please provide a psychological interpretation of the following HTP test image caption.
+    prompt = f"""Please provide a psychological interpretation of the following HTP test image caption. 
 
 Drawing Observations: {req.caption}{reference_context}
 
-Provide a concise psychological interpretation with exactly 2 sections:
+Provide a detailed psychological interpretation with the following structure:
 
-**관찰 분석 (Feature Analysis)**:
-Analyze 3-4 key visual features. For each feature, write one clear sentence explaining its psychological meaning. Format: "특징명: 의미 설명."
+1. **Feature Analysis**:
+   - Analyze each observed visual feature (size, placement, details, omissions)
+   - Explain the psychological meaning of each feature
+   - Use bullet points starting with the feature name in bold
 
-**심리적 해석 (Psychological Synthesis)**:
-Write 2-3 integrative statements connecting the features to psychological patterns. Format: "패턴명: 통합 해석."
+2. **Psychological Synthesis**:
+   - Integrate the features into a comprehensive assessment
+   - Discuss emotional state, personality traits, and psychological patterns
+   - Connect observations to underlying psychological dynamics
 
-Keep the response focused and complete all sentences. Use Korean terms for section headings but write content in English (will be translated)."""
+
+Use professional psychological terminology and maintain an analytical, empathetic tone. Write complete sentences and ensure all sections are fully developed. Do not cut off mid-sentence."""
     
     logger.info(f"\n📝 프롬프트 길이: {len(prompt)} characters")
 
