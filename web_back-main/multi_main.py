@@ -230,7 +230,7 @@ Task: Create ONE specific question in English about the drawing choices, focusin
 
 Output only the question:"""
     
-    result = generate_with_qwen(prompt)
+    result = generate_with_qwen(caption=prompt, context="")
 
     # 결과 후처리: 한 문장(질문부호로 끝나는)만 반환
     try:
