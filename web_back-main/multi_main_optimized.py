@@ -120,14 +120,10 @@ def interpret_single(req: InterpretSingle):
     # RAG 문서가 있으면 참고문헌으로 활용
     reference_context = ""
     if req.rag_docs and len(req.rag_docs) > 0:
-        # RAG 문서가 리스트인지 확인
-        if isinstance(req.rag_docs, list):
-            # 각 문서를 요약해서 컨텍스트 구성
-            ref_docs = "\n".join([f"- {str(doc)[:300]}" for doc in req.rag_docs[:3]])  # 최대 3개 문서, 각 300자
-            reference_context = f"\n\nReference Literature:\n{ref_docs}"
-            logger.info(f"✅ RAG 문서 {len(req.rag_docs[:3])}개를 참고하여 해석")
-        else:
-            logger.warning(f"⚠️  RAG 문서 형식 오류: {type(req.rag_docs)}")
+        # 각 문서를 요약해서 컨텍스트 구성
+        ref_docs = "\n".join([f"- {doc[:300]}" for doc in req.rag_docs[:3]])  # 최대 3개 문서, 각 300자
+        reference_context = f"\n\nReference Literature:\n{ref_docs}"
+        logger.info("✅ RAG 문서를 참고하여 해석")
     else:
         logger.info("⚠️  RAG 문서 없음 - 일반적인 HTP 원리로 해석")
     
@@ -135,14 +131,14 @@ def interpret_single(req: InterpretSingle):
     # instruction과 input을 명확히 분리
     prompt = f"""Please provide a psychological interpretation of the following HTP test image caption.
 
-Drawing Observations: {req.caption}{reference_context}
+Input: {req.caption}{reference_context}
 
 Provide a detailed psychological interpretation that:
-1. Analyzes each observed feature (size, placement, details, omissions) and its psychological meaning
-2. Integrates these features into a comprehensive psychological assessment
-3. Discusses emotional state, personality traits, and coping mechanisms
+1. Identifies specific visual features (size, placement, details, omissions)
+2. Explains the psychological significance of each feature
+3. Synthesizes findings into a coherent psychological assessment
 
-Use professional psychological terminology and maintain an analytical, empathetic tone."""
+Focus on emotional state, personality traits, and coping mechanisms. Use professional terminology and maintain an analytical, empathetic tone."""
     
     logger.info(f"\n📝 프롬프트 길이: {len(prompt)} characters")
 
@@ -229,15 +225,11 @@ Drawing Interpretations:
 """
 
     # 모델의 fine-tuning 형식에 맞춘 간결한 프롬프트
-    # 대화 히스토리가 있으면 이를 우선 고려, 없으면 해석만 사용
-    if conversation_text.strip():
-        context_section = f"Previous Conversation:\n{conversation_text}\n{interp_text}"
-    else:
-        context_section = f"Drawing Analysis:{interp_text}"
-    
     prompt = f"""Generate one follow-up question for an HTP psychological assessment.
 
-{context_section}
+Context:
+{conversation_text}
+{interp_text}
 
 Task: Create ONE specific question in English about the drawing choices, focusing on observable features (size, placement, details, omissions, line quality, or drawing sequence). Ask about reasoning or feelings during drawing.
 

@@ -21,7 +21,7 @@ def generate_caption(image_base64: str) -> str:
         Image.open(io.BytesIO(image_bytes))
     except Exception as e:
         print("❌ 이미지 디코딩 오류:", e)
-        return json.dumps({"ko": "", "en": ""}, ensure_ascii=False)
+        return json.dumps({"ko": ["이미지를 읽을 수 없습니다"], "en": ["Unable to read image"]}, ensure_ascii=False)
 
     try:
         content = [
@@ -52,12 +52,23 @@ def generate_caption(image_base64: str) -> str:
                     "}\n\n"
                     "캡션 작성 예시:\n"
                     "{\n"
-                    "  \"ko\": \"나무는 크고 가지가 많으며 뿌리가 깊게 그려졌다\",\n"
-                    "  \"en\": \"The tree is large with many branches and deeply drawn roots\"\n"
+                    "  \"ko\": [\n"
+                    "    \"나무는 크고 중앙에 위치해 있다\",\n"
+                    "    \"가지가 많고 위쪽으로 뻗어있다\",\n"
+                    "    \"뿌리가 깊게 그려져 있다\",\n"
+                    "    \"나뭇잎이 풍성하게 그려져 있다\"\n"
+                    "  ],\n"
+                    "  \"en\": [\n"
+                    "    \"The tree is large and centered\",\n"
+                    "    \"Many branches extending upward\",\n"
+                    "    \"Deeply drawn roots\",\n"
+                    "    \"Abundant foliage\"\n"
+                    "  ]\n"
                     "}\n\n"
                     "규칙:\n"
-                    "- 출력은 반드시 위 JSON 형식만 사용하세요.\n"
+                    "- 출력은 반드시 위 JSON 형식만 사용하세요 (ko, en 모두 문자열 배열).\n"
                     "- JSON 외의 다른 텍스트, 설명, 줄바꿈 금지.\n"
+                    "- 각 관찰 내용은 별도의 문자열로 분리하여 3-6개의 구체적 특징을 나열하세요.\n"
                     "- 캡션은 HTP 심리검사 해석에 필요한 객관적이고 구체적인 그림 요소를 설명해야 합니다.\n"
                     "- 심리적 해석이나 추론은 포함하지 마세요. 오직 관찰 가능한 그림의 특징만 설명하세요.\n"
 
@@ -88,12 +99,18 @@ def generate_caption(image_base64: str) -> str:
         # JSON 파싱
         try:
             obj = json.loads(raw_text)
-        except Exception:
+            # 리스트 형식 검증
+            if not isinstance(obj.get("ko"), list):
+                obj["ko"] = [obj.get("ko", "")]
+            if not isinstance(obj.get("en"), list):
+                obj["en"] = [obj.get("en", "")]
+        except Exception as parse_error:
             print("⚠️ GPT JSON 파싱 실패, 원본:", raw_text)
-            obj = {"ko": "", "en": ""}
+            print("⚠️ 파싱 에러:", parse_error)
+            obj = {"ko": [""], "en": [""]}
 
         return json.dumps(obj, ensure_ascii=False)
 
     except Exception as e:
         print("❌ GPT 요청 오류:", e)
-        return json.dumps({"ko": "", "en": ""}, ensure_ascii=False)
+        return json.dumps({"ko": ["캡션 생성 실패"], "en": ["Caption generation failed"]}, ensure_ascii=False)

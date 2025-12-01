@@ -120,36 +120,30 @@ def interpret_single(req: InterpretSingle):
     # RAG 문서가 있으면 참고문헌으로 활용
     reference_context = ""
     if req.rag_docs and len(req.rag_docs) > 0:
-        # RAG 문서가 리스트인지 확인
-        if isinstance(req.rag_docs, list):
-            # 각 문서를 요약해서 컨텍스트 구성
-            ref_docs = "\n".join([f"- {str(doc)[:300]}" for doc in req.rag_docs[:3]])  # 최대 3개 문서, 각 300자
-            reference_context = f"\n\nReference Literature:\n{ref_docs}"
-            logger.info(f"✅ RAG 문서 {len(req.rag_docs[:3])}개를 참고하여 해석")
-        else:
-            logger.warning(f"⚠️  RAG 문서 형식 오류: {type(req.rag_docs)}")
+        reference_context = f"\n\nReference Literature (Korean):\n{' '.join(req.rag_docs)}"
+        logger.info("✅ RAG 문서를 참고하여 해석")
     else:
         logger.info("⚠️  RAG 문서 없음 - 일반적인 HTP 원리로 해석")
     
     # 모델의 fine-tuning 형식에 맞춘 프롬프트 구조
-    # instruction과 input을 명확히 분리
     prompt = f"""Please provide a psychological interpretation of the following HTP test image caption.
 
-Drawing Observations: {req.caption}{reference_context}
+Drawing Type: {req.image_type}
+Caption: {req.caption}{reference_context}
 
-Provide a detailed psychological interpretation that:
-1. Analyzes each observed feature (size, placement, details, omissions) and its psychological meaning
-2. Integrates these features into a comprehensive psychological assessment
-3. Discusses emotional state, personality traits, and coping mechanisms
+Provide a detailed psychological interpretation analyzing the visual features and their psychological significance. Structure your response as:
 
-Use professional psychological terminology and maintain an analytical, empathetic tone."""
+1. **Feature Analysis**: Identify and interpret specific visual elements from the caption (e.g., size, placement, details, omissions).
+2. **Psychological Synthesis**: Integrate these features into a comprehensive psychological assessment of emotional state, personality traits, and coping mechanisms.
+
+Use professional psychological terminology and maintain an analytical, empathetic tone. Write the response in English."""
     
     logger.info(f"\n📝 프롬프트 길이: {len(prompt)} characters")
 
     result = generate_with_qwen(prompt)
     
     logger.info(f"✅ [INTERPRET_SINGLE] 해석 완료")
-    logger.info(f"생성된 해석: {result[:200]}..." if len(result) > 200 else f"생성된 해석: {result}")
+    logger.info(f"생성된 해석: {result}")
     logger.info("=" * 80)
     return {"interpretation": result}
 
@@ -216,32 +210,35 @@ def questions(req: QuestionReq):
         house = req.interpretations.get("house", "")
         tree = req.interpretations.get("tree", "")
         person = req.interpretations.get("person", "")
-        # 각 해석을 요약해서 포함 (너무 길면 모델 성능 저하)
-        house_summary = house[:200] + "..." if len(house) > 200 else house
-        tree_summary = tree[:200] + "..." if len(tree) > 200 else tree
-        person_summary = person[:200] + "..." if len(person) > 200 else person
-        
-        interp_text = f"""
-Drawing Interpretations:
-- House: {house_summary}
-- Tree: {tree_summary}
-- Person: {person_summary}
+        interp_text = (
+            "\nHTP Individual Interpretations (Korean):\n"
+            f"- House: {house}\n"
+            f"- Tree: {tree}\n"
+            f"- Person: {person}\n"
+        )
+
+    prompt = f"""
+You are a professional psychologist conducting an HTP (House-Tree-Person) assessment interview.
+
+Conversation History:
+{conversation_text}
+{interp_text}
+
+Task: Ask exactly ONE concrete follow-up question (English) that probes observable drawing decisions and missing elements related to the HTP drawings.
+
+Strict Requirements:
+- One sentence only, must end with a question mark.
+- Refer explicitly to the drawing (House/Tree/Person) or a concrete feature inferred from the interpretation text.
+- Focus on drawing-specific clarifications, such as:
+  • reason for emphasizing/omitting a feature (chimney, windows, roots, hands/feet, etc.)
+  • placement on the page (top/bottom/left/right, margins)
+  • size/proportion or balance (very small/large, centered, crowded/empty background)
+  • line quality/pressure or shading (pressed hard, repeated strokes)
+  • order of drawing or number of erasures/redo actions
+- Do NOT ask meta/process questions (e.g., “Shall I continue?”, “Provide more context”).
+- Do NOT ask about the test procedure itself; ask about the drawing choices and feelings during drawing.
+- No preambles, no explanations, output only the question.
 """
-
-    # 모델의 fine-tuning 형식에 맞춘 간결한 프롬프트
-    # 대화 히스토리가 있으면 이를 우선 고려, 없으면 해석만 사용
-    if conversation_text.strip():
-        context_section = f"Previous Conversation:\n{conversation_text}\n{interp_text}"
-    else:
-        context_section = f"Drawing Analysis:{interp_text}"
-    
-    prompt = f"""Generate one follow-up question for an HTP psychological assessment.
-
-{context_section}
-
-Task: Create ONE specific question in English about the drawing choices, focusing on observable features (size, placement, details, omissions, line quality, or drawing sequence). Ask about reasoning or feelings during drawing.
-
-Output only the question:"""
     
     result = generate_with_qwen(prompt)
 
@@ -260,7 +257,7 @@ Output only the question:"""
             # 물음표가 없다면 첫 줄만 사용, 길이 제한
             cleaned = text.splitlines()[0] if text else ""
             cleaned = cleaned[:200]
-        cleaned = cleaned.strip().strip('"""').strip()
+        cleaned = cleaned.strip().strip('"“”')
     except Exception as e:
         logger.warning(f"[QUESTIONS] 후처리 중 오류: {e}")
         cleaned = result

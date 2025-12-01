@@ -33,6 +33,25 @@ def _load_model():
     return _model, _tokenizer
 
 
+def _clean_output(text: str) -> str:
+    """
+    모델 출력 후처리: 불필요한 텍스트 제거
+    """
+    import re
+    
+    # 따옴표나 마크다운 코드 블록 제거
+    text = text.strip('`"\'').strip()
+    
+    # "Output:", "Answer:", "Response:" 같은 프리픽스 제거
+    text = re.sub(r'^(Output|Answer|Response|Result):\s*', '', text, flags=re.IGNORECASE)
+    
+    # 연속된 공백이나 줄바꿈 정리
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r' {2,}', ' ', text)
+    
+    return text.strip()
+
+
 def generate_with_qwen(prompt: str):
     """
     Qwen 모델을 사용해 텍스트 생성
@@ -57,13 +76,15 @@ def generate_with_qwen(prompt: str):
     
     print(f"🔍 [generate_with_qwen] Input device: {inputs['input_ids'].device}")
     
-    # 생성
+    # 생성 - fine-tuned 모델에 최적화된 파라미터
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=512,
-            temperature=0.7,
+            max_new_tokens=600,  # 더 긴 출력 허용
+            temperature=0.65,    # 약간 낮춰서 일관성 향상
+            top_p=0.9,           # nucleus sampling 추가
             do_sample=True,
+            repetition_penalty=1.1,  # 반복 방지
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id
         )
@@ -73,6 +94,9 @@ def generate_with_qwen(prompt: str):
     generated_ids = outputs[0][input_len:]
     
     result = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+    
+    # 출력 후처리
+    result = _clean_output(result)
     
     print(f"✅ [generate_with_qwen] Generated {len(result)} characters")
     

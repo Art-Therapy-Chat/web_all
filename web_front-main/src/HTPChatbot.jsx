@@ -44,6 +44,13 @@ const HTPChatbot = () => {
     tree: "",
     person: "",
   });
+  
+  // 영어 원본 해석 (질문 생성용)
+  const [interpretationsEN, setInterpretationsEN] = useState({
+    house: "",
+    tree: "",
+    person: "",
+  });
 
   const [finalInterpretation, setFinalInterpretation] = useState("");
   const [messages, setMessages] = useState([]);
@@ -243,33 +250,50 @@ const HTPChatbot = () => {
         const capJson = await capRes.json();
         
         // capJson.caption: 문자열(JSON) → 객체로 파싱
-        const captionObj = JSON.parse(capJson.caption); // { ko, en }
+        const captionObj = JSON.parse(capJson.caption); // { ko: [], en: [] }
         
-        // ✅ 상태에는 한국어 문자열만 저장
-        newCaptions[t] = captionObj.ko;
+        // ✅ 상태에는 한국어 배열을 문자열로 조합해서 저장 (화면 표시용)
+        const koCaption = Array.isArray(captionObj.ko) 
+          ? captionObj.ko.join(', ') 
+          : captionObj.ko;
+        newCaptions[t] = koCaption;
         
-        // ✅ RAG에 한국어 캡션과 한국어 타입 전달
+        // ✅ RAG에 한국어 캡션 리스트를 조합해서 전달
+        const koForRAG = Array.isArray(captionObj.ko)
+          ? captionObj.ko.join('. ')
+          : captionObj.ko;
+        
         const ragRes = await fetch(`${API_BASE}/rag`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            caption: captionObj.ko,
+            caption: koForRAG,
             image_type: tabsKorean[t],  // "집", "나무", "사람"
           }),
         });
         const ragJson = await ragRes.json();
-        console.log(captionObj.en)
+        
+        // ✅ 영어 캡션 리스트를 Qwen에 전달 (배열 그대로 또는 조합)
+        const enCaption = Array.isArray(captionObj.en)
+          ? captionObj.en.join('. ')
+          : captionObj.en;
+        console.log('Caption for interpretation:', enCaption);
+        
         // 3) 개별 해석
         const intRes = await fetch(`${API_BASE}/interpret_single`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            caption: captionObj.en,
+            caption: enCaption,
             rag_docs: ragJson.rag_docs || [],  // 백엔드 응답 형식에 맞춤
             image_type: tabsKorean[t],  // "집", "나무", "사람"
           }),
         });
         const intJson = await intRes.json();
+        
+        // ✅ 영어 원본 저장 (질문 생성용)
+        if (!window.__interpretationsEN) window.__interpretationsEN = {};
+        window.__interpretationsEN[t] = intJson.interpretation;
         
         // 영어 해석을 한국어로 번역
         const translateRes = await fetch(`${API_BASE}/translate`, {
@@ -282,13 +306,20 @@ const HTPChatbot = () => {
         
       } catch (error) {
         console.error(`Interpretation failed for ${t}:`, error);
-        newCaptions[t] = `ERROR: 캡션 생성 실패`;
-        newInterps[t] = `그림 해석 중 오류 발생. API 서버 상태 확인이 필요함.`;
+        const errorMsg = error.message || '알 수 없는 오류';
+        newCaptions[t] = `캡션 생성 실패: ${errorMsg}`;
+        newInterps[t] = `${tabNames[t].ko} 해석 중 오류가 발생했습니다.\n오류 내용: ${errorMsg}\n\n서버 상태를 확인하거나 나중에 다시 시도해주세요.`;
+        // 사용자에게 알림 (첫 번째 에러만)
+        if (!window.__errorAlertShown) {
+          window.__errorAlertShown = true;
+          alert(`${tabNames[t].ko} 처리 중 오류가 발생했습니다.\n계속 진행하거나 다시 시도할 수 있습니다.`);
+        }
       }
     }
 
     setCaptions(newCaptions);
     setInterpretations(newInterps);
+    setInterpretationsEN(window.__interpretationsEN || {});
     setCurrentPage(2);
     setIsLoading(false); // 분석 완료
     setShowLoading(false);
@@ -313,7 +344,7 @@ const HTPChatbot = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversation: [],
-          interpretations: interpretations // ✅ 핵심: 그림 분석 결과 전송
+          interpretations: interpretationsEN // ✅ 영어 원본 해석 전송 (모델 성능 최적화)
         }),
       });
       const json = await res.json();
@@ -336,23 +367,22 @@ const HTPChatbot = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [interpretations]);
+  }, [interpretationsEN]);
 
+  // useRef로 첫 질문 시작 여부 관리 (React 패턴)
+  const firstQuestionStartedRef = useRef(false);
+  
   // 2. [초기화] 결과 페이지(2)로 넘어왔고, 메시지가 비어있다면 첫 질문 자동 시작
   useEffect(() => {
-    // StrictMode의 이펙트 이중 호출 대비: 한 번만 실행
-    if (!window.__htpFirstQuestionStarted) {
-      window.__htpFirstQuestionStarted = false;
-    }
     // currentPage가 2이고, 메시지가 없으며, 아직 완료 안 됐을 때 실행
     if (currentPage === 2 && messages.length === 0 && !isComplete) {
-      const hasInterpretation = Object.values(interpretations).some(v => v);
-      if (hasInterpretation && !window.__htpFirstQuestionStarted) {
-        window.__htpFirstQuestionStarted = true;
+      const hasInterpretation = Object.values(interpretationsEN).some(v => v);
+      if (hasInterpretation && !firstQuestionStartedRef.current) {
+        firstQuestionStartedRef.current = true;
         startFirstQuestion();
       }
     }
-  }, [currentPage, messages.length, isComplete, interpretations, startFirstQuestion]);
+  }, [currentPage, messages.length, isComplete, interpretationsEN, startFirstQuestion]);
 
   // 3. [메시지 전송 함수] 사용자 답변 처리 및 다음 단계 분기
   const sendMessage = async () => {
@@ -393,11 +423,11 @@ const HTPChatbot = () => {
   // 4. [다음 질문 생성] (영어 생성 -> 번역 -> 출력)
   const handleNextQuestion = async (currentHistory, loadingIndex) => {
     try {
-      // (1) 영어 질문
+      // (1) 영어 질문 - 영어 해석 전달
       const res = await fetch(`${API_BASE}/questions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation: currentHistory, interpretations }),
+        body: JSON.stringify({ conversation: currentHistory, interpretations: interpretationsEN }),
       });
       const json = await res.json();
 
