@@ -134,34 +134,34 @@ def interpret_single(req: InterpretSingle):
     # 모델의 fine-tuning 형식에 맞춘 프롬프트 구조
     # instruction과 input을 명확히 분리
     prompt = f"""### Instruction
-You are an expert clinical psychologist. Analyze the provided "Drawing Observations" from an HTP test and provide a professional psychological interpretation.
+You are an expert in HTP (House-Tree-Person) projective drawing analysis. Analyze the provided "Drawing Observations" based on standard psychological theories and provide a structured interpretation.
 
 ### Constraints
-1. **Format**: Strictly follow the "Response Format" below. Do NOT change the structure.
-2. **Tone**: Analytical, objective, and empathetic.
-3. **Length**: Concise and to the point. Avoid fluff.
+1. **Disclaimer**: This analysis is for **educational and theoretical purposes only**. It does not constitute a medical diagnosis.
+2. **Format**: Strictly follow the "Response Format" below.
+3. **Tone**: Analytical, objective, and empathetic.
 4. **Stop**: Do NOT generate conversational fillers like "Human:", "Assistant:", or "Answer:". Stop immediately after the "Psychological Synthesis".
 
 ### Response Format
 1. **Feature Analysis**:
-   - **[Feature Name]**: [Psychological meaning]
-   - **[Feature Name]**: [Psychological meaning]
+   - **[Feature Name]**: [Theoretical meaning based on HTP literature]
+   - **[Feature Name]**: [Theoretical meaning based on HTP literature]
 
 2. **Psychological Synthesis**:
-   [A comprehensive summary paragraph connecting the features to the person's emotional state.]
+   [A comprehensive summary connecting the features to potential psychological traits.]
 
 ### Example (Reference this style)
 **Drawing Observations**: "The house is tiny and drawn at the bottom edge. No windows are visible. The lines are very faint."
 
 **Response**:
 1. **Feature Analysis**:
-   - **Tiny House**: Suggests feelings of inadequacy, withdrawal, or rejection of the home life.
-   - **Bottom Edge Placement**: Indicates a need for stability and grounding, often associated with insecurity or depression.
-   - **No Windows**: Reflects withdrawal from the environment and hostility.
-   - **Faint Lines**: Suggests low energy, shyness, or hesitancy.
+   - **Tiny House**: Theoretically suggests feelings of inadequacy, withdrawal, or rejection of the home life.
+   - **Bottom Edge Placement**: Indicates a need for stability and grounding, often associated with insecurity.
+   - **No Windows**: Reflects withdrawal from the environment.
+   - **Faint Lines**: Suggests low energy or hesitancy.
 
 2. **Psychological Synthesis**:
-   The subject appears to be experiencing significant insecurity and withdrawal. The combination of the tiny size and lack of windows suggests a defensive posture against the outside world, likely stemming from a sense of inadequacy. The faint lines further reinforce a lack of assertiveness and low energy levels.
+   Based on projective drawing theory, the subject appears to be experiencing traits associated with insecurity and withdrawal. The combination of the tiny size and lack of windows suggests a defensive posture against the outside world.
 
 ---
 

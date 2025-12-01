@@ -96,7 +96,7 @@ def generate_with_qwen(prompt: str):
             **inputs,
             max_new_tokens=500,   # 적절한 길이로 조정
             min_new_tokens=150,   # 최소 길이 보장
-            temperature=0.2,     # 약간 낮춰서 일관성 향상
+            temperature=0.3,     # 약간 낮춰서 일관성 향상
             top_p=0.9,            # nucleus sampling 추가
             do_sample=True,
             repetition_penalty=1.15,  # 반복 방지 강화
