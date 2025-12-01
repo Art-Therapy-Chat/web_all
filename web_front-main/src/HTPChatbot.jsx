@@ -235,6 +235,7 @@ const HTPChatbot = () => {
 
     let newCaptions = {};
     let newInterps = {};
+    let newInterpsEN = {}; // 영어 원본 해석 저장용 (window 대신 로컬 변수)
 
     for (const t of drawnTabs) {
       const base64 = drawings[t].split(",")[1];
@@ -291,9 +292,8 @@ const HTPChatbot = () => {
         });
         const intJson = await intRes.json();
         
-        // ✅ 영어 원본 저장 (질문 생성용)
-        if (!window.__interpretationsEN) window.__interpretationsEN = {};
-        window.__interpretationsEN[t] = intJson.interpretation;
+        // ✅ 영어 원본 저장 (질문 생성용) - window 대신 로컬 변수 사용
+        newInterpsEN[t] = intJson.interpretation;
         
         // 영어 해석을 한국어로 번역
         const translateRes = await fetch(`${API_BASE}/translate`, {
@@ -319,7 +319,7 @@ const HTPChatbot = () => {
 
     setCaptions(newCaptions);
     setInterpretations(newInterps);
-    setInterpretationsEN(window.__interpretationsEN || {});
+    setInterpretationsEN(newInterpsEN); // window 대신 로컬 변수 사용
     setCurrentPage(2);
     setIsLoading(false); // 분석 완료
     setShowLoading(false);
@@ -338,27 +338,19 @@ const HTPChatbot = () => {
     setMessages([{ role: "assistant", content: "그림을 분석하여 첫 번째 질문을 생성 중입니다..." }]);
 
     try {
-      // (1) 영어 질문 생성 (interpretations 포함)
+      // 백엔드에서 한국어 질문 직접 반환
       const res = await fetch(`${API_BASE}/questions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversation: [],
-          interpretations: interpretationsEN // ✅ 영어 원본 해석 전송 (모델 성능 최적화)
+          interpretations: interpretationsEN
         }),
       });
       const json = await res.json();
 
-      // (2) 번역 (영어 -> 한국어)
-      const translateRes = await fetch(`${API_BASE}/translate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: json.question }),
-      });
-      const translateJson = await translateRes.json();
-
-      // (3) 화면 표시
-      const questionText = (translateJson.translated || "").split("\n")[0];
+      // 번역 없이 질문 원문 직접 표시
+      const questionText = (json.question || "").split("\n")[0];
       setMessages([{ role: "assistant", content: questionText }]);
 
     } catch (error) {
@@ -420,10 +412,10 @@ const HTPChatbot = () => {
     }
   };
 
-  // 4. [다음 질문 생성] (영어 생성 -> 번역 -> 출력)
+  // 4. [다음 질문 생성] (백엔드에서 한국어로 반환)
   const handleNextQuestion = async (currentHistory, loadingIndex) => {
     try {
-      // (1) 영어 질문 - 영어 해석 전달
+      // 백엔드에서 한국어 질문 직접 반환
       const res = await fetch(`${API_BASE}/questions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -431,16 +423,8 @@ const HTPChatbot = () => {
       });
       const json = await res.json();
 
-      // (2) 번역
-      const translateRes = await fetch(`${API_BASE}/translate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: json.question }),
-      });
-      const translateJson = await translateRes.json();
-
-      // (3) 업데이트
-      updateLastMessage(translateJson.translated, loadingIndex);
+      // 번역 없이 질문 원문 직접 표시
+      updateLastMessage(json.question || "", loadingIndex);
     } catch (error) {
       throw error;
     }

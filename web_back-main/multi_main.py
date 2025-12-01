@@ -153,8 +153,19 @@ class TranslateRequest(BaseModel):
 def translate(req: TranslateRequest):
     """영어 텍스트를 한국어로 번역"""
     logger.info("🌐 [TRANSLATE] 번역 시작")
-    logger.info(f"원문 (영어): {req.text[:100]}...")
-    
+    sample = req.text[:120]
+    logger.info(f"입력 텍스트 샘플: {sample}...")
+
+    def is_korean(text: str) -> bool:
+        hangul = sum(1 for ch in text if '\uac00' <= ch <= '\ud7a3')
+        letters = sum(1 for ch in text if ch.isalpha())
+        return letters > 0 and (hangul / letters) > 0.4
+
+    # 이미 한국어면 그대로 반환 (불필요한 API 비용 절감 + 질문 변형 방지)
+    if is_korean(req.text):
+        logger.info("⚡ 입력이 한국어로 감지됨 → 번역 생략")
+        return {"translated": req.text}
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -162,16 +173,14 @@ def translate(req: TranslateRequest):
                 {"role": "system", "content": "You are a professional translator. Translate the given English text to natural Korean. Only provide the translation, nothing else."},
                 {"role": "user", "content": req.text}
             ],
-            temperature=0.3
+            temperature=0.2
         )
-        
-        translated = response.choices[0].message.content
+        translated = response.choices[0].message.content.strip()
         logger.info(f"번역 결과 (한국어): {translated[:100]}...")
         return {"translated": translated}
-        
     except Exception as e:
         logger.error(f"❌ [TRANSLATE] 번역 실패: {str(e)}")
-        return {"translated": req.text}  # 실패시 원문 반환
+        return {"translated": req.text}
 
 # ----------------------------- #
 # 5) Qwen 모델로 추가 질문 생성 (영어)
@@ -223,65 +232,64 @@ Drawing Interpretations:
         context_section = f"Drawing Analysis:{interp_text}"
     
     # -----------------------------
-    # 고정형 HTP 후속 질문 로직
+    # 고정형 HTP 후속 질문 로직 (관찰자 시점 + 중복 방지)
     # -----------------------------
-    # 모든 그림 유형에 공통적으로 적용 가능한, 특정 세부 요소(창문/잎/표정 등) 의존이 없는 질문들
-    # 부모(관찰자)가 답할 수 있도록 재구성된 관찰 중심 질문들
-    # 카테고리별 첫 5글자가 달라서 중복 카운트 방지 (집/나무/사람)
-    HOUSE_QUESTIONS = [
-        "집을 그릴 때 아이(자녀)의 표정이나 몸의 긴장도는 어떠했나요?",
-        "집에서 아이가 가장 먼저 그린 부분과 당시 반응은 어땠나요?",
-        "집을 그리는 동안 특별히 오래 머물거나 멈춰 생각한 순간이 있었나요?",
-        "집 그림을 완성한 직후 아이가 보인 첫 말이나 표정은 무엇이었나요?",
-        "집을 그리는 전체 과정에서 관찰된 아이 감정 변화(예: 차분→초조)가 있었나요?"
+    HOUSE_BANK = [
+        {"id": "house_1", "text": "집을 그릴 때 아이(자녀)의 표정이나 몸의 긴장도는 어떠했나요?", "stems": ["표정", "긴장"]},
+        {"id": "house_2", "text": "집에서 아이가 가장 먼저 그린 부분과 당시 반응은 어땠나요?", "stems": ["가장", "반응"]},
+        {"id": "house_3", "text": "집을 그리는 동안 특별히 오래 멈춰 생각한 순간이 있었나요?", "stems": ["오래", "멈춰", "생각"]},
+        {"id": "house_4", "text": "집 그림을 완성한 직후 아이가 보인 첫 말이나 표정은 무엇이었나요?", "stems": ["완성", "첫", "표정"]},
+        {"id": "house_5", "text": "집을 그리는 과정에서 관찰된 아이 감정 변화가 있었나요?", "stems": ["감정", "변화"]},
     ]
-    TREE_QUESTIONS = [
-        "나무를 그릴 때 아이(자녀)의 표정이나 에너지 변화가 느껴졌나요?",
-        "나무에서 가장 먼저 선택한 시작 부분과 그때 반응은 어땠나요?",
-        "나무를 그리며 반복적으로 고쳐 그리거나 망설인 부분이 있었나요?",
-        "나무 그림을 마친 직후 아이가 어떤 감정 신호(말·표정·행동)를 보였나요?",
-        "나무를 그리는 동안 집중도가 높아진 혹은 산만해진 구간이 있었나요?"
+    TREE_BANK = [
+        {"id": "tree_1", "text": "나무를 그릴 때 아이(자녀)의 표정이나 에너지 변화가 느껴졌나요?", "stems": ["표정", "에너지", "변화"]},
+        {"id": "tree_2", "text": "나무에서 가장 먼저 선택한 시작 부분과 그때 반응은 어땠나요?", "stems": ["가장", "반응"]},
+        {"id": "tree_3", "text": "나무를 그리며 반복적으로 고쳐 그리거나 망설인 부분이 있었나요?", "stems": ["고쳐", "망설"]},
+        {"id": "tree_4", "text": "나무 그림을 마친 직후 아이가 보인 말·표정·행동 신호는 무엇이었나요?", "stems": ["마친", "표정", "행동"]},
+        {"id": "tree_5", "text": "나무를 그리는 동안 집중도가 달라진 구간이 있었나요?", "stems": ["집중", "달라진"]},
     ]
-    PERSON_QUESTIONS = [
-        "사람을 그릴 때 아이(자녀)의 표정·자세에서 특별한 긴장 또는 편안함이 느껴졌나요?",
-        "사람 그림에서 가장 먼저 그린 신체 부위와 그때 반응은 어땠나요?",
-        "사람을 그리며 손 움직임이 빨라지거나 느려진, 힘 조절이 달라진 순간이 있었나요?",
-        "사람 그림을 완성한 직후 아이가 한 말이나 표정은 무엇이었나요?",
-        "사람을 그리는 과정에서 부모로서 관찰한 정서 변화(예: 즐거움→짜증)가 있었나요?"
+    PERSON_BANK = [
+        {"id": "person_1", "text": "사람을 그릴 때 아이(자녀)의 자세나 표정에서 긴장 혹은 편안함이 느껴졌나요?", "stems": ["자세", "표정", "긴장"]},
+        {"id": "person_2", "text": "사람 그림에서 가장 먼저 그린 신체 부위와 그때 반응은 어땠나요?", "stems": ["가장", "신체", "반응"]},
+        {"id": "person_3", "text": "사람을 그리며 손 움직임이나 힘 조절이 달라진 순간이 있었나요?", "stems": ["손", "움직임", "힘"]},
+        {"id": "person_4", "text": "사람 그림을 완성한 직후 아이가 한 말이나 표정은 무엇이었나요?", "stems": ["완성", "말", "표정"]},
+        {"id": "person_5", "text": "사람을 그리는 과정에서 관찰된 정서 변화가 있었나요?", "stems": ["정서", "변화"]},
     ]
 
-    # 이미 나온 질문들을 대화에서 추출 (assistant 역할)
-    asked = [m.get("content", "") for m in req.conversation if m.get("role") == "assistant"]
+    assistant_msgs = [m.get("content", "") for m in req.conversation if m.get("role") == "assistant"]
 
-    # 카테고리별 몇 개나 이미 나왔는지 단순 카운트 (키워드 기반)
     def count_used(bank):
-        return sum(1 for q in bank if any(q.strip()[:5] in a for a in asked))
+        used = 0
+        for item in bank:
+            if any(stem in msg for msg in assistant_msgs for stem in item["stems"]):
+                used += 1
+        return used
 
-    used_house = count_used(HOUSE_QUESTIONS)
-    used_tree = count_used(TREE_QUESTIONS)
-    used_person = count_used(PERSON_QUESTIONS)
+    used_house = count_used(HOUSE_BANK)
+    used_tree = count_used(TREE_BANK)
+    used_person = count_used(PERSON_BANK)
 
-    # 다음 우선순위 결정: 아직 한 질문도 안 한 카테고리 우선 (집 -> 나무 -> 사람)
-    if used_house < len(HOUSE_QUESTIONS):
-        next_q = HOUSE_QUESTIONS[used_house]
+    if used_house < len(HOUSE_BANK):
+        next_item = HOUSE_BANK[used_house]
         target = "house"
-    elif used_tree < len(TREE_QUESTIONS):
-        next_q = TREE_QUESTIONS[used_tree]
+    elif used_tree < len(TREE_BANK):
+        next_item = TREE_BANK[used_tree]
         target = "tree"
-    elif used_person < len(PERSON_QUESTIONS):
-        next_q = PERSON_QUESTIONS[used_person]
+    elif used_person < len(PERSON_BANK):
+        next_item = PERSON_BANK[used_person]
         target = "person"
     else:
-        # 모두 소진 시 순환
-        cycle_idx = (len(asked)) % (len(HOUSE_QUESTIONS) + len(TREE_QUESTIONS) + len(PERSON_QUESTIONS))
-        all_bank = HOUSE_QUESTIONS + TREE_QUESTIONS + PERSON_QUESTIONS
-        next_q = all_bank[cycle_idx]
+        all_bank = HOUSE_BANK + TREE_BANK + PERSON_BANK
+        cycle_idx = len(assistant_msgs) % len(all_bank)
+        next_item = all_bank[cycle_idx]
         target = "cycle"
 
-    logger.info(f"🧩 선택된 카테고리: {target}")
+    next_q = next_item["text"]
+    q_id = next_item["id"]
+    logger.info(f"🧩 선택된 카테고리: {target} / 질문 ID: {q_id}")
     logger.info(f"✅ [QUESTIONS] 최종 질문: {next_q}")
     logger.info("=" * 80)
-    return {"question": next_q}
+    return {"question": next_q, "question_id": q_id, "category": target, "lang": "ko"}
 
 # ----------------------------- #
 # 6) 최종 해석 (GPT-4o)
