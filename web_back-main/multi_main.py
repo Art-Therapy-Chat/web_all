@@ -133,46 +133,7 @@ def interpret_single(req: InterpretSingle):
     
     # 모델의 fine-tuning 형식에 맞춘 프롬프트 구조
     # instruction과 input을 명확히 분리
-    prompt = f"""### Instruction
-You are an expert in HTP (House-Tree-Person) projective drawing analysis. Analyze the provided "Drawing Observations" based on standard psychological theories and provide a structured interpretation.
-
-### Constraints
-1. **Disclaimer**: This analysis is for **educational and theoretical purposes only**. It does not constitute a medical diagnosis.
-2. **Format**: Strictly follow the "Response Format" below.
-3. **Tone**: Analytical, objective, and empathetic.
-4. **Stop**: Do NOT generate conversational fillers like "Human:", "Assistant:", or "Answer:". Stop immediately after the "Psychological Synthesis".
-
-### Response Format
-1. **Feature Analysis**:
-   - **[Feature Name]**: [Theoretical meaning based on HTP literature]
-   - **[Feature Name]**: [Theoretical meaning based on HTP literature]
-
-2. **Psychological Synthesis**:
-   [A comprehensive summary connecting the features to potential psychological traits.]
-
-### Example (Reference this style)
-**Drawing Observations**: "The house is tiny and drawn at the bottom edge. No windows are visible. The lines are very faint."
-
-**Response**:
-1. **Feature Analysis**:
-   - **Tiny House**: Theoretically suggests feelings of inadequacy, withdrawal, or rejection of the home life.
-   - **Bottom Edge Placement**: Indicates a need for stability and grounding, often associated with insecurity.
-   - **No Windows**: Reflects withdrawal from the environment.
-   - **Faint Lines**: Suggests low energy or hesitancy.
-
-2. **Psychological Synthesis**:
-   Based on projective drawing theory, the subject appears to be experiencing traits associated with insecurity and withdrawal. The combination of the tiny size and lack of windows suggests a defensive posture against the outside world.
-
----
-
-### Current Task
-**Drawing Observations**: "{req.caption}{reference_context}"
-
-**Response**:"""
-    
-    logger.info(f"\n📝 프롬프트 길이: {len(prompt)} characters")
-
-    result = generate_with_qwen(prompt)
+    result = generate_with_qwen(caption=req.caption, context=reference_context)
     
     logger.info(f"✅ [INTERPRET_SINGLE] 해석 완료")
     logger.info(f"생성된 해석: {result[:200]}..." if len(result) > 200 else f"생성된 해석: {result}")
