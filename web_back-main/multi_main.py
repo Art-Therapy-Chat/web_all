@@ -137,12 +137,15 @@ def interpret_single(req: InterpretSingle):
 
 Drawing Observations: {req.caption}{reference_context}
 
-Provide a detailed psychological interpretation that:
-1. Analyzes each observed feature (size, placement, details, omissions) and its psychological meaning
-2. Integrates these features into a comprehensive psychological assessment
-3. Discusses emotional state, personality traits, and coping mechanisms
+Provide a concise psychological interpretation with exactly 2 sections:
 
-Use professional psychological terminology and maintain an analytical, empathetic tone."""
+**관찰 분석 (Feature Analysis)**:
+Analyze 3-4 key visual features. For each feature, write one clear sentence explaining its psychological meaning. Format: "특징명: 의미 설명."
+
+**심리적 해석 (Psychological Synthesis)**:
+Write 2-3 integrative statements connecting the features to psychological patterns. Format: "패턴명: 통합 해석."
+
+Keep the response focused and complete all sentences. Use Korean terms for section headings but write content in English (will be translated)."""
     
     logger.info(f"\n📝 프롬프트 길이: {len(prompt)} characters")
 

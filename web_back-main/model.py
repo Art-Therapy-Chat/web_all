@@ -35,7 +35,7 @@ def _load_model():
 
 def _clean_output(text: str) -> str:
     """
-    모델 출력 후처리: 불필요한 텍스트 제거
+    모델 출력 후처리: 불필요한 텍스트 제거 및 불완전한 문장 처리
     """
     import re
     
@@ -48,6 +48,20 @@ def _clean_output(text: str) -> str:
     # 연속된 공백이나 줄바꿈 정리
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r' {2,}', ' ', text)
+    
+    # 불완전한 문장 감지 및 제거
+    text = text.strip()
+    if text and text[-1] not in '.!?。':
+        # 마지막 완전한 문장 부호 찾기
+        last_complete_idx = -1
+        for i in range(len(text) - 1, -1, -1):
+            if text[i] in '.!?。':
+                last_complete_idx = i
+                break
+        
+        # 완전한 문장이 있으면 거기까지만 유지
+        if last_complete_idx > 0:
+            text = text[:last_complete_idx + 1]
     
     return text.strip()
 
@@ -80,13 +94,15 @@ def generate_with_qwen(prompt: str):
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=600,  # 더 긴 출력 허용
-            temperature=0.65,    # 약간 낮춰서 일관성 향상
-            top_p=0.9,           # nucleus sampling 추가
+            max_new_tokens=500,   # 적절한 길이로 조정
+            min_new_tokens=150,   # 최소 길이 보장
+            temperature=0.65,     # 약간 낮춰서 일관성 향상
+            top_p=0.9,            # nucleus sampling 추가
             do_sample=True,
-            repetition_penalty=1.1,  # 반복 방지
+            repetition_penalty=1.15,  # 반복 방지 강화
             pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id
+            eos_token_id=tokenizer.eos_token_id,
+            no_repeat_ngram_size=3  # 3-gram 반복 방지
         )
     
     # 프롬프트 제거: 입력 토큰 이후만 추출
