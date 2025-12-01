@@ -222,13 +222,22 @@ Drawing Interpretations:
     else:
         context_section = f"Drawing Analysis:{interp_text}"
     
-    prompt = f"""Generate one follow-up question for an HTP psychological assessment.
+    prompt = f"""Role: Clinical Psychologist conducting a Post-Drawing Inquiry (PDI).
+Target Audience: The patient who drew the picture.
 
+Input Analysis:
 {context_section}
 
-Task: Create ONE specific question in English about the drawing choices, focusing on observable features (size, placement, details, omissions, line quality, or drawing sequence). Ask about reasoning or feelings during drawing.
+Task: Generate ONE specific, empathetic follow-up question to ask the patient.
+The goal is to help the patient project their unconscious feelings onto the image.
 
-Output only the question:"""
+STRICT Rules:
+1. Focus on the **narrative, mood, weather, or future** of the drawn object.
+2. **FORBIDDEN**: Do NOT use technical terms like "placement", "size", "lines", "shading", "indicate", or "represent".
+3. **FORBIDDEN**: Do NOT ask "Why did you draw...?" (Avoid analytical questions).
+4. **Style**: Ask about the object as if it is alive (e.g., "Is the tree happy?", "What is the person thinking?", "What is the weather like around the house?").
+
+Output only the question in English:"""
     
     result = generate_with_qwen(prompt)
 
