@@ -133,24 +133,42 @@ def interpret_single(req: InterpretSingle):
     
     # 모델의 fine-tuning 형식에 맞춘 프롬프트 구조
     # instruction과 input을 명확히 분리
-    prompt = f"""Please provide a psychological interpretation of the following HTP test image caption. 
+    prompt = f"""### Instruction
+You are an expert clinical psychologist. Analyze the provided "Drawing Observations" from an HTP test and provide a professional psychological interpretation.
 
-Drawing Observations: {req.caption}{reference_context}
+### Constraints
+1. **Format**: Strictly follow the "Response Format" below. Do NOT change the structure.
+2. **Tone**: Analytical, objective, and empathetic.
+3. **Length**: Concise and to the point. Avoid fluff.
+4. **Stop**: Do NOT generate conversational fillers like "Human:", "Assistant:", or "Answer:". Stop immediately after the "Psychological Synthesis".
 
-Provide a detailed psychological interpretation with the following structure:
-
+### Response Format
 1. **Feature Analysis**:
-   - Analyze each observed visual feature (size, placement, details, omissions)
-   - Explain the psychological meaning of each feature
-   - Use bullet points starting with the feature name in bold
+   - **[Feature Name]**: [Psychological meaning]
+   - **[Feature Name]**: [Psychological meaning]
 
 2. **Psychological Synthesis**:
-   - Integrate the features into a comprehensive assessment
-   - Discuss emotional state, personality traits, and psychological patterns
-   - Connect observations to underlying psychological dynamics
+   [A comprehensive summary paragraph connecting the features to the person's emotional state.]
 
+### Example (Reference this style)
+**Drawing Observations**: "The house is tiny and drawn at the bottom edge. No windows are visible. The lines are very faint."
 
-Use professional psychological terminology and maintain an analytical, empathetic tone. Write complete sentences and ensure all sections are fully developed. Do not cut off mid-sentence."""
+**Response**:
+1. **Feature Analysis**:
+   - **Tiny House**: Suggests feelings of inadequacy, withdrawal, or rejection of the home life.
+   - **Bottom Edge Placement**: Indicates a need for stability and grounding, often associated with insecurity or depression.
+   - **No Windows**: Reflects withdrawal from the environment and hostility.
+   - **Faint Lines**: Suggests low energy, shyness, or hesitancy.
+
+2. **Psychological Synthesis**:
+   The subject appears to be experiencing significant insecurity and withdrawal. The combination of the tiny size and lack of windows suggests a defensive posture against the outside world, likely stemming from a sense of inadequacy. The faint lines further reinforce a lack of assertiveness and low energy levels.
+
+---
+
+### Current Task
+**Drawing Observations**: "{req.caption}{reference_context}"
+
+**Response**:"""
     
     logger.info(f"\n📝 프롬프트 길이: {len(prompt)} characters")
 
