@@ -66,7 +66,7 @@ def _clean_output(text: str) -> str:
     return text.strip()
 
 
-def interpret_with_qwen(caption: str, context: str = ""):
+def generate_with_qwen(caption: str, context: str = ""):
     """
     Qwen 모델을 사용해 HTP 해석 생성 (Chat Template + Prefill 적용)
     """
@@ -160,59 +160,4 @@ Analyze the provided "Drawing Observations" based on standard psychological theo
     result = _clean_output(final_result)
     
     print(f"✅ [Result] Generated length: {len(result)}")
-    return result
-
-def generate_with_qwen(prompt: str):
-
-    """
-    Qwen 모델을 사용해 텍스트 생성
-    모델은 최초 1회만 로드되고 재사용됨
-    """
-
-    # 모델 로드 (이미 로드되어 있으면 재사용)
-    model, tokenizer = _load_model()
-
-   
-
-    print("=" * 80)
-    print("📝 [PROMPT] 해석 생성 프롬프트:")
-    print("-" * 80)
-    print(prompt)
-    print("=" * 80)
-    print(f"🔍 [generate_with_qwen] Model device: {model.device}")
-
-    # 입력 텐서 준비
-    inputs = tokenizer(prompt, return_tensors="pt")
-    # 모든 입력을 모델과 같은 디바이스로 이동
-    inputs = {k: v.to(model.device) for k, v in inputs.items()}
-    print(f"🔍 [generate_with_qwen] Input device: {inputs['input_ids'].device}")
-   
-    # 생성 - fine-tuned 모델에 최적화된 파라미터
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=500,   # 적절한 길이로 조정
-            min_new_tokens=150,   # 최소 길이 보장
-            temperature=0.65,     # 약간 낮춰서 일관성 향상
-            top_p=0.9,            # nucleus sampling 추가
-            do_sample=True,
-            repetition_penalty=1.15,  # 반복 방지 강화
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-            no_repeat_ngram_size=3  # 3-gram 반복 방지
-        )
-
-   
-
-    # 프롬프트 제거: 입력 토큰 이후만 추출
-
-    input_len = inputs["input_ids"].shape[1]
-    generated_ids = outputs[0][input_len:]
-    result = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
-
-   
-
-    # 출력 후처리
-    result = _clean_output(result)
-    print(f"✅ [generate_with_qwen] Generated {len(result)} characters")
     return result

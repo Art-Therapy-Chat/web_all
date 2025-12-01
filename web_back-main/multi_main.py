@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from caption import generate_caption
-from model import generate_with_qwen,interpret_with_qwen
+from model import generate_with_qwen
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import json
@@ -133,7 +133,7 @@ def interpret_single(req: InterpretSingle):
     
     # 모델의 fine-tuning 형식에 맞춘 프롬프트 구조
     # instruction과 input을 명확히 분리
-    result = interpret_with_qwen(caption=req.caption, context=reference_context)
+    result = generate_with_qwen(caption=req.caption, context=reference_context)
     
     logger.info(f"✅ [INTERPRET_SINGLE] 해석 완료")
     logger.info(f"생성된 해석: {result[:200]}..." if len(result) > 200 else f"생성된 해석: {result}")
@@ -185,7 +185,7 @@ class QuestionReq(BaseModel):
 def questions(req: QuestionReq):
     logger.info("=" * 80)
     logger.info("❓ [QUESTIONS] 추가 질문 생성 시작")
-    logger.info("🤖 사용 모델: Qwen (helena29/Qwen2.5_LoRA_for_HTP)")
+    logger.info("🤖 사용 모델: (고정형 질문 모드 - LLM 호출 없음)")
     logger.info(f"대화 기록 수: {len(req.conversation)}")
     
     for idx, msg in enumerate(req.conversation[-3:], 1):  # 최근 3개만 로깅
@@ -222,48 +222,66 @@ Drawing Interpretations:
     else:
         context_section = f"Drawing Analysis:{interp_text}"
     
-    prompt = f"""Role: Clinical Psychologist conducting a Post-Drawing Inquiry (PDI).
-Target Audience: The patient who drew the picture.
+    # -----------------------------
+    # 고정형 HTP 후속 질문 로직
+    # -----------------------------
+    # 모든 그림 유형에 공통적으로 적용 가능한, 특정 세부 요소(창문/잎/표정 등) 의존이 없는 질문들
+    # 부모(관찰자)가 답할 수 있도록 재구성된 관찰 중심 질문들
+    # 카테고리별 첫 5글자가 달라서 중복 카운트 방지 (집/나무/사람)
+    HOUSE_QUESTIONS = [
+        "집을 그릴 때 아이(자녀)의 표정이나 몸의 긴장도는 어떠했나요?",
+        "집에서 아이가 가장 먼저 그린 부분과 당시 반응은 어땠나요?",
+        "집을 그리는 동안 특별히 오래 머물거나 멈춰 생각한 순간이 있었나요?",
+        "집 그림을 완성한 직후 아이가 보인 첫 말이나 표정은 무엇이었나요?",
+        "집을 그리는 전체 과정에서 관찰된 아이 감정 변화(예: 차분→초조)가 있었나요?"
+    ]
+    TREE_QUESTIONS = [
+        "나무를 그릴 때 아이(자녀)의 표정이나 에너지 변화가 느껴졌나요?",
+        "나무에서 가장 먼저 선택한 시작 부분과 그때 반응은 어땠나요?",
+        "나무를 그리며 반복적으로 고쳐 그리거나 망설인 부분이 있었나요?",
+        "나무 그림을 마친 직후 아이가 어떤 감정 신호(말·표정·행동)를 보였나요?",
+        "나무를 그리는 동안 집중도가 높아진 혹은 산만해진 구간이 있었나요?"
+    ]
+    PERSON_QUESTIONS = [
+        "사람을 그릴 때 아이(자녀)의 표정·자세에서 특별한 긴장 또는 편안함이 느껴졌나요?",
+        "사람 그림에서 가장 먼저 그린 신체 부위와 그때 반응은 어땠나요?",
+        "사람을 그리며 손 움직임이 빨라지거나 느려진, 힘 조절이 달라진 순간이 있었나요?",
+        "사람 그림을 완성한 직후 아이가 한 말이나 표정은 무엇이었나요?",
+        "사람을 그리는 과정에서 부모로서 관찰한 정서 변화(예: 즐거움→짜증)가 있었나요?"
+    ]
 
-Input Analysis:
-{context_section}
+    # 이미 나온 질문들을 대화에서 추출 (assistant 역할)
+    asked = [m.get("content", "") for m in req.conversation if m.get("role") == "assistant"]
 
-Task: Generate ONE specific, empathetic follow-up question to ask the patient.
-The goal is to help the patient project their unconscious feelings onto the image.
+    # 카테고리별 몇 개나 이미 나왔는지 단순 카운트 (키워드 기반)
+    def count_used(bank):
+        return sum(1 for q in bank if any(q.strip()[:5] in a for a in asked))
 
-STRICT Rules:
-1. Focus on the **narrative, mood, weather, or future** of the drawn object.
-2. **FORBIDDEN**: Do NOT use technical terms like "placement", "size", "lines", "shading", "indicate", or "represent".
-3. **FORBIDDEN**: Do NOT ask "Why did you draw...?" (Avoid analytical questions).
-4. **Style**: Ask about the object as if it is alive (e.g., "Is the tree happy?", "What is the person thinking?", "What is the weather like around the house?").
+    used_house = count_used(HOUSE_QUESTIONS)
+    used_tree = count_used(TREE_QUESTIONS)
+    used_person = count_used(PERSON_QUESTIONS)
 
-Output only the question in English:"""
-    
-    result = generate_with_qwen(prompt)
+    # 다음 우선순위 결정: 아직 한 질문도 안 한 카테고리 우선 (집 -> 나무 -> 사람)
+    if used_house < len(HOUSE_QUESTIONS):
+        next_q = HOUSE_QUESTIONS[used_house]
+        target = "house"
+    elif used_tree < len(TREE_QUESTIONS):
+        next_q = TREE_QUESTIONS[used_tree]
+        target = "tree"
+    elif used_person < len(PERSON_QUESTIONS):
+        next_q = PERSON_QUESTIONS[used_person]
+        target = "person"
+    else:
+        # 모두 소진 시 순환
+        cycle_idx = (len(asked)) % (len(HOUSE_QUESTIONS) + len(TREE_QUESTIONS) + len(PERSON_QUESTIONS))
+        all_bank = HOUSE_QUESTIONS + TREE_QUESTIONS + PERSON_QUESTIONS
+        next_q = all_bank[cycle_idx]
+        target = "cycle"
 
-    # 결과 후처리: 한 문장(질문부호로 끝나는)만 반환
-    try:
-        import re
-
-        text = (result or "").strip()
-        # 줄바꿈/불릿/번호 제거
-        text = re.sub(r"^[\-\d\.)\s]+", "", text)
-        # 처음 물음표가 나올 때까지의 문장만 취득
-        m = re.search(r"(.+?\?)", text, flags=re.S)
-        if m:
-            cleaned = m.group(1)
-        else:
-            # 물음표가 없다면 첫 줄만 사용, 길이 제한
-            cleaned = text.splitlines()[0] if text else ""
-            cleaned = cleaned[:200]
-        cleaned = cleaned.strip().strip('"""').strip()
-    except Exception as e:
-        logger.warning(f"[QUESTIONS] 후처리 중 오류: {e}")
-        cleaned = result
-
-    logger.info(f"✅ [QUESTIONS] 최종 질문: {cleaned}")
+    logger.info(f"🧩 선택된 카테고리: {target}")
+    logger.info(f"✅ [QUESTIONS] 최종 질문: {next_q}")
     logger.info("=" * 80)
-    return {"question": cleaned}
+    return {"question": next_q}
 
 # ----------------------------- #
 # 6) 최종 해석 (GPT-4o)
